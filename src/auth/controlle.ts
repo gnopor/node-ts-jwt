@@ -1,3 +1,6 @@
+// importation
+import fakeDB from "./model";
+
 // register
 const register = async (req, res) => {
   const { email, password } = req.body;
