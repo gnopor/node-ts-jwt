@@ -3,10 +3,9 @@ import { Request, Response } from "express";
 import { hash, compare } from "bcryptjs";
 import { sign, verify } from "jsonwebtoken";
 
-import { isAuth } from "./utils";
+import { isAuth, blacklistToken } from "./utils";
 import fakeDB from "./model";
 // --> helpers
-const refreshTokens: string[] = [];
 const ACCESS_TOKEN_SECRET: string =
   process.env.ACCESS_TOKEN_SECRET || "test access";
 const REFRESH_TOKEN_SECRET: string =
@@ -70,8 +69,6 @@ const login = async (req: Request, res: Response) => {
     );
 
     // 4. Put the refreshtoken in the database
-    refreshTokens.push(refresh_token);
-    // console.log(refreshTokens);
 
     // 5. Send token.
 
@@ -92,12 +89,20 @@ const login = async (req: Request, res: Response) => {
 };
 
 // logout
-const logout = (req: Request, res: Response) => {
-  // we attemps logout, clear frontend storage of access_token
-  res.clearCookie("refresh_token", { path: "/refresh_token" });
-  return res.send({
-    message: "Logged out",
-  });
+const logout = async (req: Request, res: Response) => {
+  try {
+    const payload: any = isAuth(req);
+    if (payload.userId !== null) {
+      // we attemps logout, clear frontend storage of access_token
+      res.clearCookie("refresh_token", { path: "/refresh_token" });
+      blacklistToken(req);
+      return res.send({
+        message: "Logged out",
+      });
+    }
+  } catch (err) {
+    res.send({ Error: err.message });
+  }
 };
 
 // Protected route
