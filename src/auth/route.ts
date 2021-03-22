@@ -1,14 +1,10 @@
 import express, { Router } from "express";
 const authRoute: Router = express.Router();
 
+import authController from "./controller";
+
 // 1. Register a user
-authRoute.post("/register", (req, res) => {
-  const { email, password } = req.body;
-
-  console.log(email, password);
-
-  res.json({ message: "test" });
-});
+authRoute.post("/register", authController.register);
 
 // // 2. login user
 // authRoute.post("/login", );
