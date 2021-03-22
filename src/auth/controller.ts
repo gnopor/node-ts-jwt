@@ -1,12 +1,18 @@
 // importation
 import { Request, Response } from "express";
 import { hash, compare } from "bcryptjs";
+import { sign, verify } from "jsonwebtoken";
 
+import { isAuth } from "./utils";
 import fakeDB from "./model";
-// helpers
-const refreshTokens = [];
+// --> helpers
+const refreshTokens: string[] = [];
+const ACCESS_TOKEN_SECRET: string =
+  process.env.ACCESS_TOKEN_SECRET || "test access";
+const REFRESH_TOKEN_SECRET: string =
+  process.env.REFRESH_TOKEN_SECRET || "test refress";
 
-// main code
+// --> main code
 // register
 const register = async (req: Request, res: Response) => {
   const { email, password } = req.body;
@@ -46,75 +52,111 @@ const login = async (req: Request, res: Response) => {
     const valid = await compare(password, user.password);
     if (!valid) throw new Error("Password not correct");
 
-    // 3. Create refresh and access token
-    const accesstoken = createAccessToken(user.id);
-    const refreshtoken = createRefreshToken(user.id);
+    // 3. Create access and refresh token
+    const access_token: string = await sign(
+      { userId: user.id },
+      ACCESS_TOKEN_SECRET,
+      {
+        expiresIn: "15m",
+      }
+    );
+
+    const refresh_token: string = await sign(
+      { userId: user.id },
+      REFRESH_TOKEN_SECRET,
+      {
+        expiresIn: "7d",
+      }
+    );
 
     // 4. Put the refreshtoken in the database
-    user.refreshtoken = refreshtoken;
-    console.log(fakeDB);
+    refreshTokens.push(refresh_token);
+    // console.log(refreshTokens);
 
-    // 5. Send token. Refreshtoken as a cookie and accesstoken as a regular response
-    sendRefreshToken(res, refreshtoken);
-    sendAccessToken(req, res, accesstoken);
+    // 5. Send token.
+
+    res
+      .cookie("refresh_token", refresh_token, {
+        httpOnly: true, // this will ensure that the token can't be access into client
+        path: "/refresh_token",
+        // secure: true,
+        // sameSite: "none",
+      })
+      .json({
+        access_token,
+        refresh_token,
+      });
   } catch (err) {
     res.send({ Error: err.message });
   }
 };
 
-// // logout
-// const logout = (req, res) => {
-//   res.clearCookie("refreshToken", { path: "/refresh_token" });
-//   return res.send({
-//     message: "Logged out",
-//   });
-// };
+// logout
+const logout = (req: Request, res: Response) => {
+  // we attemps logout, clear frontend storage of access_token
+  res.clearCookie("refresh_token", { path: "/refresh_token" });
+  return res.send({
+    message: "Logged out",
+  });
+};
 
-// // Protected route
-// const protected = async (req, res) => {
-//   try {
-//     const userId = isAuth(req);
-//     if (userId !== null) {
-//       res.send({
-//         data: "This is protected data.",
-//         user: fakeDB.find((user) => user.id === userId),
-//       });
-//     }
-//   } catch (err) {
-//     res.send({ Error: err.message });
-//   }
-// };
+// Protected route
+const protectedTest = async (req: Request, res: Response) => {
+  try {
+    const payload: any = isAuth(req);
+    if (payload.userId !== null) {
+      // console.log(payload);
+      res.send({
+        data: "This is protected data.",
+        user: fakeDB.find((user) => user.id === +payload.userId),
+      });
+    }
+  } catch (err) {
+    res.send({ Error: err.message });
+  }
+};
 
-// // refresh
-// const refresh = (req, res) => {
-//   const token = req.cookies.refreshToken; // we can do this because we have install cookie-parser
+// refresh
+// note: this has a problem we use response.cookie() to set cookie instead of writehead
+const refresh = (req: Request, res: Response) => {
+  const token = req.cookies.refresh_token; // we can do this because we have install cookie-parser
 
-//   // If we don't have a token in our request
-//   if (!token) return res.send({ accesstoken: "" });
-//   // We have a token, let's verify it!
-//   let payload = null;
-//   try {
-//     payload = verify(token, process.env.REFRESH_TOKEN_SECRET);
-//   } catch (err) {
-//     console.log({ accesstoken: "" });
-//   }
-//   // Token is valid, check if user exist
-//   const user = fakeDB.find((user) => user.id === payload.userId);
-//   if (!user) return res.send({ accesstoken: "" });
+  // If we don't have a token in our request
+  if (!token) return res.send({ accesstoken: "" });
+  // We have a token, let's verify it!
+  let payload: any = null;
+  try {
+    payload = verify(token, REFRESH_TOKEN_SECRET);
+  } catch (err) {
+    console.log({ accesstoken: "" });
+  }
+  // Token is valid, check if user exist
+  const user = fakeDB.find((user) => user.id === payload.userId);
+  if (!user) return res.send({ accesstoken: "" });
 
-//   // User exist, Check if refreshtoken exist on user
-//   if (user.refreshtoken !== token) {
-//     return res.send({ accesstoken: "" });
-//   }
+  // Token exist, create new Refresh and Access Token
+  const accesstoken: string = sign({ userId: user.id }, ACCESS_TOKEN_SECRET, {
+    expiresIn: "15m",
+  });
 
-//   // Token exist, create new Refresh and Access Token
-//   const accesstoken = createAccessToken(user.id);
-//   const refreshtoken = createRefreshToken(user.id);
-//   user.refreshtoken = refreshtoken;
+  const refresh_token: string = sign(
+    { userId: user.id },
+    REFRESH_TOKEN_SECRET,
+    {
+      expiresIn: "7d",
+    }
+  );
 
-//   // All good to go. Send new refreshtoken and accesstoken
-//   sendRefreshToken(res, refreshtoken);
-//   return res.send({ accesstoken });
-// };
+  // All good to go. Send new refreshtoken and accesstoken
+  res.cookie("refresh_token", refresh_token, {
+    httpOnly: true, // this will ensure that the token can't be access into client
+    path: "/refresh_token",
+  });
 
-export default { register };
+  return res.send({
+    accesstoken,
+    refresh_token,
+  });
+};
+
+export default { register, login, logout, protectedTest, refresh };
