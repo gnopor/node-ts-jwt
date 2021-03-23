@@ -19,6 +19,7 @@ const isAuth = (req: Request) => {
 
   return verify(token, ACCESS_TOKEN_SECRET);
 };
+
 // --> add token to the blaclist
 const blacklistToken = (req: Request) => {
   const authorization = req.headers["authorization"];

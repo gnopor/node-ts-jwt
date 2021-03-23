@@ -2,6 +2,9 @@
   "name": "jwt-auth-typescript",
   "version": "1.0.0",
   "description": "",
+  "engines": {
+    "node": "14.15.1"
+  },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.5",
@@ -26,7 +29,8 @@
   "scripts": {
     "start": "node dist/app.js",
     "dev": "nodemon src/app.ts",
-    "build": "tsc -p ."
+    "build": "tsc -p .",
+    "postinstall": "npm run build"
   },
   "author": "gnop",
   "license": "ISC"
