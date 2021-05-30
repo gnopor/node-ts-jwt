@@ -16,4 +16,3 @@ const fakeDB: User[] = [
 ];
 
 export default fakeDB;
-fakeDB.push();
